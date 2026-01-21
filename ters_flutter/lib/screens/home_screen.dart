@@ -111,10 +111,8 @@ class _HomeScreenState extends State<HomeScreen> {
                     children: [
                       const Expanded(flex: 1, child: DatabaseViewTrigger()),
                       const SizedBox(height: 12),
-                      const SizedBox(height: 80, child: SettingsPanelTrigger()), 
-                      const SizedBox(height: 12),
                       SizedBox(
-                        height: 120, 
+                        height: 200, 
                         child: SpectrumMeasurementTrigger(
                           settings: _spectrumSettings,
                           onSettingsChanged: _updateSpectrumSettings,

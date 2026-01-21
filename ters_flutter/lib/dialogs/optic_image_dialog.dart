@@ -10,6 +10,10 @@ import 'package:flutter/rendering.dart';
 import 'package:lucide_flutter/lucide_flutter.dart';
 import 'package:intl/intl.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:provider/provider.dart'; // [필수] Provider 패키지
+
+// [필수] 우리가 만든 Provider import
+import 'package:ters_flutter/providers/camera_provider.dart';
 
 class OpticImageDialog extends StatefulWidget {
   final List<Map<String, dynamic>> gallery;
@@ -35,7 +39,7 @@ class _OpticImageDialogState extends State<OpticImageDialog> {
   bool _showSettings = false; 
 
   // --- 상태 변수들 (카메라 설정 데이터) ---
-  String _resLive = "1920 x 1080"; // 실시간 해상도 (헤더에 표시됨)
+  String _resLive = "1920 x 1080"; 
   String _resCapture = "2840 x 2160";
   bool _isColorMode = true;
   bool _flipHorizontal = false;
@@ -67,12 +71,17 @@ class _OpticImageDialogState extends State<OpticImageDialog> {
     super.initState();
     _updateTime();
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) => _updateTime());
+
+    // [안전장치] 혹시 Trigger에서 연결이 안 된 상태로 바로 들어왔을 경우를 대비해
+    // 여기서도 연결 시도를 한 번 더 해줍니다. (이미 연결되어 있으면 Provider가 알아서 무시함)
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<CameraProvider>().connectToCamera();
+    });
   }
 
   void _updateTime() {
     if(mounted) {
       setState(() {
-        // 날짜 형식 변경 (2025. 12. 17. 오후 5:25:41)
         _currentTime = DateFormat('yyyy. MM. dd. a h:mm:ss', 'ko_KR').format(DateTime.now());
       });
     }
@@ -81,6 +90,11 @@ class _OpticImageDialogState extends State<OpticImageDialog> {
   @override
   void dispose() {
     _timer.cancel();
+    
+    // ⚠️ [중요 수정] 연결 종료(disconnect) 코드를 완전히 삭제했습니다.
+    // 여기서 연결을 끊으면, 팝업이 닫혔을 때 Trigger(작은 화면)의 영상도 꺼지기 때문입니다.
+    // 카메라는 앱이 완전히 종료될 때까지 계속 켜져 있어야 합니다.
+    
     super.dispose();
   }
 
@@ -177,8 +191,11 @@ class _OpticImageDialogState extends State<OpticImageDialog> {
   Widget build(BuildContext context) {
     final bool isAllSelected = widget.gallery.isNotEmpty && _selectedIndices.length == widget.gallery.length;
 
+    // [필수] Provider 구독
+    final cameraProvider = Provider.of<CameraProvider>(context);
+
     return Dialog(
-      backgroundColor: Colors.white, // 전체 배경 흰색 (Figma 스타일)
+      backgroundColor: Colors.white, 
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.0)),
       child: Container(
         width: 1000,
@@ -197,7 +214,7 @@ class _OpticImageDialogState extends State<OpticImageDialog> {
             ),
             const SizedBox(height: 12),
 
-            // 🌟 2. [추가됨] 검은색 Status Bar
+            // 🌟 2. Status Bar
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               decoration: BoxDecoration(
@@ -217,13 +234,20 @@ class _OpticImageDialogState extends State<OpticImageDialog> {
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                         decoration: BoxDecoration(
-                          color: _liveView ? Colors.indigoAccent.withOpacity(0.2) : Colors.redAccent.withOpacity(0.2),
+                          color: cameraProvider.isConnected 
+                              ? Colors.indigoAccent.withOpacity(0.2) 
+                              : Colors.redAccent.withOpacity(0.2),
                           borderRadius: BorderRadius.circular(4),
-                          border: Border.all(color: _liveView ? Colors.indigoAccent : Colors.redAccent),
+                          border: Border.all(
+                            color: cameraProvider.isConnected ? Colors.indigoAccent : Colors.redAccent
+                          ),
                         ),
                         child: Text(
-                          _liveView ? "Live View" : "Stopped", 
-                          style: TextStyle(color: _liveView ? Colors.indigoAccent : Colors.redAccent, fontSize: 12, fontWeight: FontWeight.bold)
+                          cameraProvider.isConnected ? "Live View" : "Connecting...", 
+                          style: TextStyle(
+                            color: cameraProvider.isConnected ? Colors.indigoAccent : Colors.redAccent, 
+                            fontSize: 12, fontWeight: FontWeight.bold
+                          )
                         ),
                       ),
                     ],
@@ -235,7 +259,7 @@ class _OpticImageDialogState extends State<OpticImageDialog> {
                       const SizedBox(width: 8),
                       Container(width: 1, height: 12, color: Colors.grey),
                       const SizedBox(width: 8),
-                      const Text("30 FPS", style: TextStyle(color: Colors.grey, fontSize: 14)), // FPS는 임시값
+                      const Text("30 FPS", style: TextStyle(color: Colors.grey, fontSize: 14)), 
                     ],
                   )
                 ],
@@ -260,23 +284,35 @@ class _OpticImageDialogState extends State<OpticImageDialog> {
                               child: Stack(
                                 fit: StackFit.expand,
                                 children: [
-                                  // 1. 카메라 화면 (배경)
-                                  Container(
-                                    decoration: BoxDecoration(
-                                      gradient: LinearGradient(
-                                        colors: _isColorMode 
-                                          ? [Colors.grey[900]!, Colors.black]
-                                          : [Colors.black, Colors.grey[800]!], 
-                                        begin: Alignment.center, end: Alignment.bottomCenter
-                                      )
-                                    ),
+                                  // 1. [핵심] Provider의 이미지 표시
+                                  Consumer<CameraProvider>(
+                                    builder: (context, provider, child) {
+                                      if (provider.currentImage == null) {
+                                        return const Center(
+                                          child: Column(
+                                            mainAxisAlignment: MainAxisAlignment.center,
+                                            children: [
+                                              CircularProgressIndicator(color: Colors.white30),
+                                              SizedBox(height: 10),
+                                              Text("카메라 연결 대기중...", style: TextStyle(color: Colors.white54)),
+                                            ],
+                                          ),
+                                        );
+                                      } else {
+                                        return Image.memory(
+                                          provider.currentImage!,
+                                          fit: BoxFit.contain, 
+                                          gaplessPlayback: true, 
+                                        );
+                                      }
+                                    },
                                   ),
                                   
                                   // 2. 십자선 (Focus Grid)
                                   Center(child: Container(width: double.infinity, height: 1, color: Colors.redAccent.withOpacity(0.5))),
                                   Center(child: Container(width: 1, height: double.infinity, color: Colors.redAccent.withOpacity(0.5))),
                                   
-                                  // 🌟 3. [추가됨] Auto Focus 표시 (좌측 상단)
+                                  // 3. Auto Focus 표시
                                   if (_autoFocus)
                                     Positioned(
                                       top: 16, left: 16,
@@ -297,7 +333,7 @@ class _OpticImageDialogState extends State<OpticImageDialog> {
                                       ),
                                     ),
 
-                                  // 🌟 4. [추가됨] Multi Focus 표시 (우측 상단)
+                                  // 4. Multi Focus 표시
                                   if (_multiFocus)
                                     Positioned(
                                       top: 16, right: 16,
@@ -333,7 +369,6 @@ class _OpticImageDialogState extends State<OpticImageDialog> {
                   // [오른쪽] 갤러리 OR 설정 패널
                   Container(
                     width: 320, 
-                    // 배경색을 짙은 회색으로 (설정 패널과 어울리게)
                     decoration: BoxDecoration(color: const ui.Color.fromARGB(255, 255, 255, 255), borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.grey[800]!)),
                     child: _showSettings 
                         ? _buildSettingsPanel() 
@@ -347,8 +382,6 @@ class _OpticImageDialogState extends State<OpticImageDialog> {
       ),
     );
   }
-
-  // --- 위젯들 ---
 
   Widget _buildGalleryPanel(bool isAllSelected) {
     return Column(
@@ -557,8 +590,6 @@ class _OpticImageDialogState extends State<OpticImageDialog> {
     );
   }
 
-  // --- 헬퍼 함수들 ---
-
   Widget _buildSectionTitle(String title) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8.0),
@@ -659,8 +690,8 @@ class _OpticImageDialogState extends State<OpticImageDialog> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: Colors.white, // 배경색을 흰색으로 변경
-        border: Border.all(color: Colors.grey[300]!), // 테두리 색상 변경
+        color: Colors.white, 
+        border: Border.all(color: Colors.grey[300]!), 
         borderRadius: BorderRadius.circular(8),
       ),
       child: Row(
@@ -673,8 +704,8 @@ class _OpticImageDialogState extends State<OpticImageDialog> {
             child: Switch(
               value: value,
               onChanged: onChanged,
-              activeColor: Colors.blueAccent, // 활성 색상
-              inactiveThumbColor: Colors.grey[400], // 비활성 색상
+              activeColor: Colors.blueAccent, 
+              inactiveThumbColor: Colors.grey[400], 
               inactiveTrackColor: Colors.grey[200],
             ),
           ),
@@ -706,7 +737,7 @@ class _OpticImageDialogState extends State<OpticImageDialog> {
                   icon: const Icon(LucideIcons.camera, size: 18),
                   label: const Text('캡처'),
                   style: OutlinedButton.styleFrom(
-                    foregroundColor: Colors.black87, // 텍스트 색상 검정
+                    foregroundColor: Colors.black87, 
                     side: BorderSide(color: Colors.grey[600]!)
                   ),
                   onPressed: _captureImage, 

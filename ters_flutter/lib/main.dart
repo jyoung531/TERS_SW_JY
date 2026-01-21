@@ -1,12 +1,37 @@
+// lib/main.dart
+
 import 'package:flutter/material.dart';
-import 'package:ters_flutter/screens/home_screen.dart';
+import 'package:provider/provider.dart'; // 필수
 import 'package:intl/date_symbol_data_local.dart';
 
+// [필수] 우리가 만든 Provider들 import
+import 'package:ters_flutter/providers/camera_provider.dart';
+import 'package:ters_flutter/providers/device_status_provider.dart'; // 👈 [추가된 부분]
+import 'package:ters_flutter/screens/home_screen.dart';
+import 'package:ters_flutter/providers/spectrograph_provider.dart';
+import 'package:ters_flutter/providers/database_provider.dart';
 
-void main() async{
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await initializeDateFormatting('ko_KR', null);
-  runApp(const MyApp());
+
+  runApp(
+    MultiProvider(
+      providers: [
+        // 1. 카메라 관리자
+        ChangeNotifierProvider(create: (_) => CameraProvider()),
+
+        // 2. 장비 상태 관리자
+        // create 뒤에 ..initialize()를 붙이면 앱 켜지자마자 연결을 시도
+        ChangeNotifierProvider(create: (_) => DeviceStatusProvider()..initialize()),
+
+        ChangeNotifierProvider(create: (_) => SpectrographProvider()),
+
+        ChangeNotifierProvider(create: (_) => DatabaseProvider()),
+      ],
+      child: const MyApp(),
+    ),
+  );
 }
 
 class MyApp extends StatelessWidget {
@@ -16,27 +41,21 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'TERS-SW',
-      debugShowCheckedModeBanner: false, // 디버그 배너 숨기기
+      debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        // 전체 테마를 어둡게 설정합니다.
         brightness: Brightness.dark,
-        scaffoldBackgroundColor: const Color(0xFF121212), // 기본 배경색
-        primaryColor: Colors.tealAccent, // 포인트 컬러 (임의 지정)
-
-        // 텍스트 테마 설정
+        scaffoldBackgroundColor: const Color(0xFF121212),
+        primaryColor: Colors.tealAccent,
         textTheme: const TextTheme(
           bodyMedium: TextStyle(color: Colors.white70),
           titleMedium: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
-
-        // ListTile (사이드바 메뉴) 테마
         listTileTheme: const ListTileThemeData(
           textColor: Colors.white,
           iconColor: Colors.white70,
         ),
       ),
-      home: const HomeScreen(), // 앱이 시작되면 HomeScreen을 보여줍니다.
+      home: const HomeScreen(),
     );
   }
 }
-

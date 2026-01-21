@@ -2,7 +2,7 @@ name: ters_flutter
 description: "A new Flutter project."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
-publish_to: 'none' # Remove this line if you wish to publish to pub.dev
+publish_to: "none" # Remove this line if you wish to publish to pub.dev
 
 # The following defines the version and build number for your application.
 # A version number is three numbers separated by dots, like 1.2.43
@@ -31,6 +31,15 @@ dependencies:
   flutter:
     sdk: flutter
 
+  # 1. 제어 명령 (HTTP) 담당 : "카메라 켜줘", "이동해"
+  http: ^1.2.0
+
+  # 2. 실시간 영상 (WebSocket) 담당 : "영상 데이터 계속 보내줘"
+  web_socket_channel: ^3.0.0
+
+  # 3. 데이터 관리 (Provider) 담당 : "데이터 왔으니 화면 고쳐"
+  provider: ^6.1.1
+
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
@@ -55,7 +64,6 @@ dev_dependencies:
 
 # The following section is specific to Flutter packages.
 flutter:
-
   # The following line ensures that the Material Icons font is
   # included with your application, so that you can use the icons in
   # the material Icons class.

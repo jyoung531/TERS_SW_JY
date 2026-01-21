@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_flutter/lucide_flutter.dart';
+import 'package:ters_flutter/dialogs/database_view_dialog.dart';
 
 class DatabaseViewTrigger extends StatelessWidget {
   const DatabaseViewTrigger({super.key});
@@ -7,8 +8,12 @@ class DatabaseViewTrigger extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return InkWell(
-      onTap: () {
-        print("Database View Tapped");
+     onTap: () {
+        // 🌟 [수정] 다이얼로그 띄우기
+        showDialog(
+          context: context,
+          builder: (context) => const DatabaseViewDialog(),
+        );
       },
       child: Container(
         decoration: BoxDecoration(

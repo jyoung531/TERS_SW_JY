@@ -1,13 +1,16 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:lucide_flutter/lucide_flutter.dart'; // 루시드 아이콘 사용
+import 'package:lucide_flutter/lucide_flutter.dart';
+import 'package:provider/provider.dart';
+
+import 'package:ters_flutter/providers/device_status_provider.dart'; // [필수]
 
 class StatusBar extends StatefulWidget implements PreferredSizeWidget {
   const StatusBar({super.key});
 
   @override
-  Size get preferredSize => const Size.fromHeight(50); // 높이 50으로 고정
+  Size get preferredSize => const Size.fromHeight(50);
 
   @override
   State<StatusBar> createState() => _StatusBarState();
@@ -21,14 +24,8 @@ class _StatusBarState extends State<StatusBar> {
   void initState() {
     super.initState();
     _currentTime = _formatDateTime(DateTime.now());
-    
-    // 1초마다 시간 갱신
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (mounted) { // 위젯이 화면에 있을 때만 실행
-        setState(() {
-          _currentTime = _formatDateTime(DateTime.now());
-        });
-      }
+      if (mounted) setState(() => _currentTime = _formatDateTime(DateTime.now()));
     });
   }
 
@@ -38,149 +35,173 @@ class _StatusBarState extends State<StatusBar> {
 
   @override
   void dispose() {
-    _timer.cancel(); // 타이머 종료
+    _timer.cancel();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    // AppBar 대신 Container로 커스텀 디자인 적용
+    // 📡 Provider 구독
+    final deviceProvider = Provider.of<DeviceStatusProvider>(context);
+    final isConnected = deviceProvider.isConnected; // 연결 여부
+
     return Container(
       width: double.infinity,
       height: 50,
       padding: const EdgeInsets.symmetric(horizontal: 16.0),
       decoration: BoxDecoration(
-        color: const Color(0xFF161618), // 배경색 (다른 패널 배경과 통일)
-        border: Border(
-          bottom: BorderSide(color: Colors.grey[800]!), // 하단 경계선 추가
-        ),
+        color: const Color(0xFF161618),
+        border: Border(bottom: BorderSide(color: Colors.grey[800]!)),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          // ==============================
-          // 🟢 좌측: 시스템 상태 표시
-          // ==============================
+          // ============================================
+          // 🟢 좌측: 시스템 상태 + 장비 정보 (동적 변경)
+          // ============================================
           Row(
             children: [
-              // 상태 표시 LED (초록색 원 + 그림자)
+              // 1. 상태 LED
               Container(
-                width: 10,
-                height: 10,
-                decoration: const BoxDecoration(
-                  color: Colors.green,
+                width: 8,
+                height: 8,
+                decoration: BoxDecoration(
+                  color: isConnected ? Colors.green : Colors.red, // 연결 유무에 따른 색상
                   shape: BoxShape.circle,
                   boxShadow: [
-                    BoxShadow(color: Colors.greenAccent, blurRadius: 4, spreadRadius: 1)
+                    BoxShadow(
+                      color: isConnected ? Colors.greenAccent : Colors.redAccent, 
+                      blurRadius: 4, spreadRadius: 1
+                    )
                   ],
                 ),
               ),
               const SizedBox(width: 12),
-              const Text(
-                '시스템 작동 중',
-                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+              Text(
+                isConnected ? 'SYSTEM READY' : 'DISCONNECTED', // 텍스트 변경
+                style: TextStyle(
+                  color: isConnected ? Colors.white : Colors.redAccent, 
+                  fontWeight: FontWeight.bold, fontSize: 13
+                ),
               ),
               
-              const SizedBox(width: 24), // 간격
+              Container(height: 16, width: 1, color: Colors.grey[700], margin: const EdgeInsets.symmetric(horizontal: 24)),
+
+              // 2. 장비 정보 (연결 안되면 흐리게 표시)
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Icon(LucideIcons.microscope, color: isConnected ? Colors.blueAccent : Colors.grey[700], size: 16),
+                  const SizedBox(width: 10),
+                  Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text("DEVICE", style: TextStyle(color: Colors.grey[600], fontSize: 9, fontWeight: FontWeight.bold)),
+                      Text(
+                        deviceProvider.deviceName, // "Unknown Device" or "ToupCam..."
+                        style: TextStyle(
+                          color: isConnected ? Colors.white70 : Colors.grey[600], 
+                          fontSize: 12
+                        )
+                      ),
+                    ],
+                  )
+                ],
+              ),
+              const SizedBox(width: 24),
               
-              // 연결됨 배지
+              // 3. 연결 배지
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
                   color: Colors.grey[850],
                   borderRadius: BorderRadius.circular(4),
                   border: Border.all(color: Colors.grey[700]!),
                 ),
                 child: Row(
-                  children: const [
-                    Icon(LucideIcons.circleCheck, color: Colors.grey, size: 14),
-                    SizedBox(width: 6),
-                    Text('연결됨', style: TextStyle(color: Colors.grey, fontSize: 12)),
+                  children: [
+                    Icon(LucideIcons.link, color: isConnected ? Colors.green : Colors.grey, size: 12),
+                    const SizedBox(width: 6),
+                    Text(
+                      isConnected ? 'Connected' : 'Offline', 
+                      style: TextStyle(color: isConnected ? Colors.green : Colors.grey, fontSize: 11)
+                    ),
                   ],
                 ),
               ),
             ],
           ),
 
-          // ==============================
-          // 🕒 우측: 설정 버튼 + 상태 배지 + 시간
-          // ==============================
+          // ============================================
+          // 🕒 우측: 온도 + 버튼 + 시간
+          // ============================================
           Row(
             children: [
-              // ⚙️ [New] 설정 버튼 추가
-               IconButton(
-                onPressed: () {
-                  print("Refresh Button Clicked");
-                  // 여기에 설정 팝업 로직 추가 가능
-                },
-                icon: const Icon(LucideIcons.refreshCw, color: Colors.grey, size: 20),
-                tooltip: '새로고침',
-                splashRadius: 20, // 클릭 효과 크기 줄임
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(), // 여백 최소화
-              ),
-              const SizedBox(width: 16),
-
-              IconButton(
-                onPressed: () {
-                  print("Settings Button Clicked");
-                  // 여기에 설정 팝업 로직 추가 가능
-                },
-                icon: const Icon(LucideIcons.settings, color: Colors.grey, size: 20),
-                tooltip: '환경 설정',
-                splashRadius: 20, // 클릭 효과 크기 줄임
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(), // 여백 최소화
-              ),
-              
-              const SizedBox(width: 16),
-
-              IconButton(
-                onPressed: () {
-                  print("Save Button Clicked");
-                  // 여기에 설정 팝업 로직 추가 가능
-                },
-                icon: const Icon(LucideIcons.save, color: Colors.grey, size: 20),
-                tooltip: '저장',
-                splashRadius: 20, // 클릭 효과 크기 줄임
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(), // 여백 최소화
-              ),
-              
-              const SizedBox(width: 16),
-              
-              // 완료 배지
+              // 4. 온도 (연결 안되면 숨기거나 비활성 표시)
+              // 여기서는 연결 안되면 회색 "--.-" 로 표시
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
-                  color: Colors.green.withOpacity(0.2), // 연한 초록 배경
-                  border: Border.all(color: Colors.green.withOpacity(0.5)), // 초록 테두리
+                  // 연결 여부 & 냉각 여부에 따른 배경색
+                  color: !isConnected 
+                      ? Colors.grey[900] 
+                      : (deviceProvider.isCooling ? Colors.blue.withOpacity(0.1) : Colors.red.withOpacity(0.1)),
                   borderRadius: BorderRadius.circular(4),
-                ),
-                child: const Text(
-                  '완료',
-                  style: TextStyle(color: Colors.green, fontSize: 12, fontWeight: FontWeight.bold),
-                ),
-              ),
-
-              const SizedBox(width: 16),
-              
-              // ⏰ 현재 시간
-              Row(
-                children: [
-                  const Icon(LucideIcons.clock, color: Colors.grey, size: 14),
-                  const SizedBox(width: 8),
-                  Text(
-                    _currentTime,
-                    // monospace 폰트를 써야 숫자가 바뀔 때 글자가 흔들리지 않음
-                    style: TextStyle(color: Colors.grey[400], fontFamily: 'monospace', fontSize: 14),
+                  border: Border.all(
+                    color: !isConnected
+                        ? Colors.grey[800]!
+                        : (deviceProvider.isCooling ? Colors.blue.withOpacity(0.3) : Colors.red.withOpacity(0.3))
                   ),
-                ],
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      LucideIcons.thermometerSnowflake, 
+                      color: !isConnected ? Colors.grey[700] : (deviceProvider.isCooling ? Colors.blue[300] : Colors.red[300]), 
+                      size: 14
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      isConnected ? '${deviceProvider.temperature.toStringAsFixed(1)}°C' : '--.-°C',
+                      style: TextStyle(
+                        color: !isConnected ? Colors.grey[700] : (deviceProvider.isCooling ? Colors.blue[100] : Colors.red[100]), 
+                        fontFamily: 'monospace', 
+                        fontWeight: FontWeight.bold, fontSize: 13
+                      )
+                    ),
+                  ],
+                ),
               ),
+              const SizedBox(width: 24),
+
+              // 5. 버튼 그룹
+              _buildIconButton(LucideIcons.refreshCcw, 'Refresh', () {}),
+              const SizedBox(width: 8),
+              _buildIconButton(LucideIcons.settings, 'Settings', () {}),
+              const SizedBox(width: 8),
+              _buildIconButton(LucideIcons.save, 'Save', () {}),
+              
+              const SizedBox(width: 24),
+              
+              // 6. 시간
+              Text(_currentTime, style: TextStyle(color: Colors.grey[500], fontFamily: 'monospace', fontSize: 13)),
             ],
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildIconButton(IconData icon, String tooltip, VoidCallback onPressed) {
+    return IconButton(
+      onPressed: onPressed,
+      icon: Icon(icon, color: Colors.grey[400], size: 18),
+      tooltip: tooltip,
+      splashRadius: 20,
+      padding: EdgeInsets.zero,
+      constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+      style: IconButton.styleFrom(hoverColor: Colors.white10),
     );
   }
 }
